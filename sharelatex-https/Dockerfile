@@ -28,8 +28,9 @@ RUN touch /var/www/sharelatex/web/app/views/project/editor/review-panel.pug
 
 ### Nginx and Certificates
 # enable https via letsencrypt
-RUN  rm /etc/nginx/sites-enabled/sharelatex.conf
-COPY nginx/sharelatex.conf /etc/nginx/sites-enabled/sharelatex.conf
+# this can be skipped if traefik is in front
+#RUN  rm /etc/nginx/sites-enabled/sharelatex.conf
+#COPY nginx/sharelatex.conf /etc/nginx/sites-enabled/sharelatex.conf
 
 # get maintained best practice ssl from certbot
 RUN wget https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf -O /etc/nginx/options-ssl-nginx.conf    

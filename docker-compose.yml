@@ -1,5 +1,54 @@
 version: '2.2'
 services:
+    traefik:
+        image: traefik:latest
+        container_name: traefik
+        restart: unless-stopped
+        security_opt:
+          - no-new-privileges:true
+        networks:
+          - web
+        ports:
+          - 80:80
+          - 443:443
+          - 8443:8443
+          # - 8080:8080
+          # - 27017:27017
+        volumes:
+          - ${MYDATA}/letsencrypt:/letsencrypt
+          - /etc/localtime:/etc/localtime:ro
+          - /var/run/docker.sock:/var/run/docker.sock:ro
+          - ./traefik/dynamic_conf.yml:/dynamic_conf.yml
+          - ./traefik/users.htpasswd:/users.htpasswd
+
+        command:
+          - "--api=true"
+          - "--api.dashboard=true"
+          #- "--api.insecure=true" # provides the dashboard on http://IPADRESS:8080
+          - "--providers.docker=true"
+          - "--ping"
+          - "--providers.docker.network=web"
+          - "--providers.file.filename=/dynamic_conf.yml"
+          - "--providers.docker.exposedbydefault=false"
+          - "--entrypoints.web.address=:80"
+          - "--entrypoints.web-secure.address=:443"
+          - "--entrypoints.web-admin.address=:8443"
+          - "--certificatesresolvers.myhttpchallenge.acme.httpchallenge=true"
+          - "--certificatesresolvers.myhttpchallenge.acme.httpchallenge.entrypoint=web"
+          - "--certificatesresolvers.myhttpchallenge.acme.email=${MYMAIL}"
+          - "--certificatesresolvers.myhttpchallenge.acme.storage=/letsencrypt/acme.json"
+          - "--entrypoints.mongo.address=:27017"
+          #- --certificatesresolvers.myhttpchallenge.acme.caserver=https://acme-v02.api.letsencrypt.org/directory
+        labels:
+          - "traefik.enable=true"
+          # Enable dashboard on port 8443
+          - "traefik.http.routers.dashboard.entrypoints=web-admin"
+          - "traefik.http.routers.dashboard.rule=Host(`${MYDOMAIN}`)" 
+          - "traefik.http.routers.dashboard.tls=true"
+          - "traefik.http.routers.dashboard.middlewares=auth"
+          - "traefik.http.middlewares.auth.basicauth.usersfile=/users.htpasswd"
+          - "traefik.http.routers.dashboard.service=api@internal"
+
     sharelatex:
         restart: always
         image: sharelatex-https:latest
@@ -8,20 +57,45 @@ services:
                 condition: service_healthy
             redis:
                 condition: service_healthy
-            simple-certbot:
+            traefik: 
                 condition: service_started
+            #simple-certbot:
+            #    condition: service_started
         privileged: false
-        ports:
+        networks:
+            - web
+        expose:
             - 80
             - 443
         links:
             - mongo
             - redis
-            - simple-certbot
         volumes:
             - ${MYDATA}/sharelatex:/var/lib/sharelatex
             - ${MYDATA}/letsencrypt:/etc/letsencrypt:ro
-            - ${MYDATA}/letsencrypt/live/${MYDOMAIN}/:/etc/letsencrypt/certs/domain
+            # - ${MYDATA}/letsencrypt/live/${MYDOMAIN}/:/etc/letsencrypt/certs/domain
+        labels:
+              - "traefik.enable=true"
+              - "traefik.http.routers.tex.entrypoints=web"
+              - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+              - "traefik.http.routers.sharel.middlewares=redirect-to-https@docker"
+              - "traefik.http.routers.sharel-secured.rule=Host(`${MYDOMAIN}`)"
+              - "traefik.http.routers.sharel-secured.tls=true"
+              - "traefik.http.routers.sharel-secured.tls.certresolver=myhttpchallenge"
+              - "traefik.http.routers.sharel-secured.entrypoints=web-secure"
+              - "traefik.http.routers.proxy-https.entrypoints=web-secure"
+              - "traefik.http.routers.proxy-https.rule=Host(`${MYDOMAIN}`)" 
+              - "traefik.http.services.sharel.loadbalancer.server.port=80"
+              - "traefik.http.services.sharel.loadbalancer.server.scheme=http"
+              # ToDo - internally connect via https: reuse the certifiacte from traefik (acme.json)
+              #- "traefik.http.services.sharel.loadbalancer.server.port=443"
+              #- "traefik.http.services.sharel.loadbalancer.server.scheme=https"
+              - "traefik.http.services.sharel.loadbalancer.sticky.cookie=true"
+              - "traefik.http.services.sharel.loadbalancer.sticky.cookie.name=io"
+              - "traefik.http.services.sharel.loadbalancer.sticky.cookie.httponly=true"
+              - "traefik.http.services.sharel.loadbalancer.sticky.cookie.secure=true"
+              - "traefik.http.services.sharel.loadbalancer.sticky.cookie.samesite=io"
+
         environment:
             SHARELATEX_APP_NAME: Overleaf
             SHARELATEX_MONGO_URL: mongodb://mongo/sharelatex
@@ -49,8 +123,8 @@ services:
             SHARELATEX_ALLOW_PUBLIC_ACCESS: 'true' 
             SHARELATEX_ALLOW_ANONYMOUS_READ_AND_WRITE_SHARING: 'true'
 
-            #SHARELATEX_SECURE_COOKIE: 'true'
-            #SHARELATEX_BEHIND_PROXY: 'true'
+            SHARELATEX_SECURE_COOKIE: 'true'
+            SHARELATEX_BEHIND_PROXY: 'true'
             
             # Same property, unfortunately with different names in
             # different locations
@@ -76,6 +150,14 @@ services:
             interval: 10s
             timeout: 10s
             retries: 5
+        labels:
+            - "traefik.enable=true"
+            - "traefik.tcp.routers.mongodb.rule=HostSNI(`*`)"
+            - "traefik.tcp.services.mongodb.loadbalancer.server.port=27017"
+            - "traefik.tcp.routers.mongodb.tls=true"
+            - "traefik.tcp.routers.mongodb.entrypoints=mongo" 
+        networks:
+            - web
 
     redis:
         restart: always
@@ -98,23 +180,10 @@ services:
             interval: 10s
             timeout: 5s
             retries: 5
+        networks:
+            - web
 
-
-    simple-certbot:
-        restart: always
-        image: certbot/certbot
-        container_name: simple-certbot
-        ports:
-            - 80:80
-        volumes:
-            - ${MYDATA}/letsencrypt:/etc/letsencrypt
-        # a bit hacky but this docker image uses very little disk-space
-        # best practices for ssl and nginx are set in the ldap-overleaf-sl Dockerfile
-        entrypoint: 
-            - "/bin/sh"
-            - -c
-            - | 
-              trap exit TERM;\
-              certbot certonly --standalone -d ${MYDOMAIN} --agree-tos -m ${MYMAIL} -n ; \
-              while :; do certbot renew; sleep 240h & wait $${!}; done;
+networks:
+  web:
+    external: true
 

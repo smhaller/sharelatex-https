@@ -18,24 +18,21 @@ use the command
 ```
 make
 ```
-to generate the ldap-overleaf-ls docker image.
+to generate the sharelatex-https docker image.
 
 
 
+use the command
+```
+docker network create web
+```
+to create a network for the docker instances.
 
-Then start docker containers:
+Then start docker containers (with loadbalancer):
 ``` 
-docker-compose up -d
+export NUMINSTANCES=1
+docker-compose up -d --scale sharelatex=$NUMINSTANCES
 ```
 
-*Known Issue:*
-During the first startup the certbot image will get an initial certificate - if that 
-happens not in a very timely manner sharelatex will fail to start (due to the missing certificates 
-nginx crashes). Solution: wait 10 seconds and restart the sharelatex container.
-
-```
-docker stop shrelatex-https
-docker-compose up -d
-```
 
 
