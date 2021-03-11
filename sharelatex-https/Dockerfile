@@ -33,10 +33,9 @@ RUN touch /var/www/sharelatex/web/app/views/project/editor/review-panel.pug
 #COPY nginx/sharelatex.conf /etc/nginx/sites-enabled/sharelatex.conf
 
 # get maintained best practice ssl from certbot
-RUN wget https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf -O /etc/nginx/options-ssl-nginx.conf    
-RUN wget https://raw.githubusercontent.com/certbot/certbot/master/certbot/certbot/ssl-dhparams.pem -O /etc/nginx/ssl-dhparams.pem 
+#RUN wget https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf -O /etc/nginx/options-ssl-nginx.conf    
+#RUN wget https://raw.githubusercontent.com/certbot/certbot/master/certbot/certbot/ssl-dhparams.pem -O /etc/nginx/ssl-dhparams.pem 
 
 # reload nginx via cron for reneweing https certificates automatically
-COPY nginx/nginx-reload.sh  /etc/cron.weekly/
-RUN chmod 0744 /etc/cron.weekly/nginx-reload.sh
-
+#COPY nginx/nginx-reload.sh  /etc/cron.weekly/
+#RUN chmod 0744 /etc/cron.weekly/nginx-reload.sh
