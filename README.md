@@ -18,7 +18,7 @@ use the command
 ```
 make
 ```
-to generate the ldap-overleaf-ls docker image.
+to generate the sharelatex-https docker image.
 
 
 
